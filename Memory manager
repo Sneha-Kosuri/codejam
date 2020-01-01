@@ -1,0 +1,160 @@
+#include<stdio.h>
+#include<sys/types.h>	
+#include<stdlib.h>		
+#include<time.h>  		
+
+//structure to load all the parameters of a process
+
+/* process_id for unique process id, flag for non-empty memeory, mem for memory of processes, cycle for number of cycles, ptr pointer to point processes */
+
+struct Process  {
+  int process_id;	
+  int flag;	
+  int mem;		
+  int cycle; 
+  void *ptr;
+};
+
+//methods declaration 
+struct timespec start={0,0}, end={0,0};
+static long long int allocated = 0; 
+void *MAIN_MEMORY = NULL;       
+static int q = 0;					
+static int top = 0;					
+void *free_pool[100];          
+int memory_allocator(void);		
+void start_th(int *i);			
+void *process (void *info);		
+struct Process p[50];		
+int a[50];
+int sum = 0;
+
+//User Defined Malloc function 
+void *my_malloc(size_t size, int flag){			
+if (flag){									
+  int *addr =  MAIN_MEMORY + allocated;
+  allocated += size;						
+  return addr;
+} else {
+      int* addr = free_pool[top];
+      top++;					
+      allocated += size;
+      return addr;
+  }
+}
+
+//User defined free function 
+void *my_free(void *addr, size_t size)
+{
+  free_pool[q] = addr;
+  q++;  
+  allocated -= size;
+}
+
+//time calculation 
+float timeCalculation( struct timespec start, struct timespec end) 
+{
+  double endTime = (double)(end.tv_sec + 1.0e-9*end.tv_nsec);
+  double startTime = (double)(start.tv_sec + 1.0e-9*start.tv_nsec);
+  return (endTime - startTime)* 0.001; 
+}
+
+//function handles threads which will execute for 50 cycles and frees the memory 
+void *process (void *info){
+  int sleepTime=0;
+  int value  = *(int*)info;
+
+  printf("Process executing: %d\n", p[value].process_id);
+  sleep(p[value].cycle/ 1000);
+  sleepTime=0;
+  while(sleepTime++<p[value].cycle/1000); 
+  sleepTime=0;			
+
+  if (p[value].ptr != NULL) {
+    my_free(p[value].ptr, p[value].mem * 1024);
+  }  
+
+  p[value].flag = 1;
+  printf("\tProcess completed: %d\n", p[value].process_id);
+  sum += 1;
+  return 0;
+}
+
+//start_th function creates thread for each process which simulates a process
+void start_th(int *value)
+{
+pthread_t tid;													
+if (pthread_create(&tid, NULL, process,(void*)value) < 0)		
+    printf("Error\n");
+}
+
+int memory_allocator() {
+	return (rand()%200);
+}
+
+//process initialization with random memory and average memeroy taken by all 50 process
+int* processInstantiation(int num){
+  int i=0, memory=0, cycles=0;
+  int pid = 1;
+ for (i = 0; i < 50; i++) {
+    p[i].process_id = pid;
+    p[i].mem = memory_allocator();
+    allocated += p[i].mem * 1024; 
+    p[i].cycle = cycles;
+    int j;
+    for(j=0;j<50;j++)
+      cycles = cycles +1 ;
+    memory = memory + p[i].mem;
+    pid++;
+  }
+int response[] = {memory, cycles};
+ return response;
+}
+
+void startProcessThreads(int num) {
+  int i;
+  int preDefinedMemory = 1024*1024*10; //10MB memory
+  for (i = 0; i < num; i++) {	
+  if (preDefinedMemory < allocated) {
+		while (allocated > preDefinedMemory)
+		
+    while ((p[i].mem * 1024) < allocated);  
+    p[i].ptr = my_malloc(p[i].mem * 1024, 0); 
+	} 
+  else {
+		p[i].ptr = my_malloc(p[i].mem * 1024, 1); 
+	}
+	p[i].flag = 0;
+	a[i] = i;
+	start_th(&a[i]);
+	}
+	while(sum != num);
+}
+
+
+int main() {
+
+  int k = 50, i ;			
+  int memory = 0, cycles = 0;		
+
+  MAIN_MEMORY = malloc(1024*1024*10);
+  int *response = processInstantiation(k);
+  memory = response[0] / 50;		
+
+  for (i = 0; i < 50; i++) {
+	  printf("Process id: %d", p[i].process_id);
+    printf("\tMemory: %d", p[i].mem);
+    printf("\tCycles: %d\n", p[i].cycle);
+  }
+
+  clock_gettime(CLOCK_MONOTONIC, &start);
+  startProcessThreads(50);
+  clock_gettime(CLOCK_MONOTONIC, &end);
+  double timeDiff = timeCalculation(start,end);
+
+  printf("\nAverage Memory = %d ", memory);
+  printf("\nTotal time for execution : %.8f \n", timeDiff);
+
+  pthread_exit();
+  return 0;
+}
